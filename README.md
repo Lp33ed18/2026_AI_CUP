@@ -48,6 +48,10 @@ conda activate myenv
 
     `--cap`（預設: `11`）  
         說明：整數型上限參數（例如截斷、分箱或類別數限制等用途），具體用途依實作而定。
+- 使用範例：
+    run.bat
+    run.bat --train "inputs/train.csv" --test "inputs/test_new.csv" --epochs 9 --batch 16
+
 
 # 使用save.bat紀錄版本
 會自動建立backup 資料夾，他會把目標程式碼（預設是"baseline code.py"、"result/submission.csv"、 upload_result.txt）自動寫到history裡面，當作一次上傳版本的紀錄
