@@ -1,0 +1,9 @@
+[Epoch 1/9] train_loss=2.1603 val_loss=1.8459 F1_action=0.2748 F1_point=0.2756 AUC=0.6559 Final~0.3514
+[Epoch 2/9] train_loss=1.7477 val_loss=1.5269 F1_action=0.3482 F1_point=0.4094 AUC=0.7516 Final~0.4534
+[Epoch 3/9] train_loss=1.4782 val_loss=1.3326 F1_action=0.4048 F1_point=0.4865 AUC=0.7979 Final~0.5161
+[Epoch 4/9] train_loss=1.2973 val_loss=1.1841 F1_action=0.4595 F1_point=0.5436 AUC=0.8584 Final~0.5730
+[Epoch 5/9] train_loss=1.1492 val_loss=1.0543 F1_action=0.5160 F1_point=0.6105 AUC=0.9000 Final~0.6306
+[Epoch 6/9] train_loss=1.0107 val_loss=0.9289 F1_action=0.5543 F1_point=0.6929 AUC=0.9370 Final~0.6863
+[Epoch 7/9] train_loss=0.8804 val_loss=0.8168 F1_action=0.5861 F1_point=0.7852 AUC=0.9599 Final~0.7405
+[Epoch 8/9] train_loss=0.7656 val_loss=0.7125 F1_action=0.6082 F1_point=0.8529 AUC=0.9768 Final~0.7798
+[Epoch 9/9] train_loss=0.6679 val_loss=0.6253 F1_action=0.6312 F1_point=0.8889 AUC=0.9871 Final~0.8055

@@ -65,6 +65,14 @@ def main():
         else:
             print(f"注意: 檔案不存在，跳過: {src}", file=sys.stderr)
 
+
+    log_path = cwd / "result/log.txt"
+    if log_path.exists():
+        try:
+            shutil.copy2(log_path, dest_dir / "log.txt")
+        except Exception as e:
+            print(f"複製 log.txt 失敗: {e}", file=sys.stderr)
+            
     # 建立 upload_result.txt 並寫入數字
     try:
         upload_file = dest_dir / "upload_result.txt"
@@ -91,7 +99,7 @@ def main():
     # except Exception as e:
     #     print(f"無法建立備份資料夾: {e}", file=sys.stderr)
     #     sys.exit(3)
-
+"""
     copied = []
     for src in (baseline_path, submission_path):
         if src.exists():
@@ -114,6 +122,7 @@ def main():
 
     # 簡短輸出結果
     print(str(dest_dir))
+"""
 
 if __name__ == "__main__":
     main()
