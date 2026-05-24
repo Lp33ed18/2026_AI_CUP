@@ -1,8 +1,7 @@
-# run_lstm_final.py
+# run_independent_lstm.py
 """
-LSTM baseline with UNK handling and score normalization.
-Save as run_lstm_final.py and run:
-python run_lstm_final.py --train train.csv --test test.csv --sample sample_submission.csv --out submission.csv
+Independent Multi-Model Training with UNK handling and score normalization.
+Based on the provided baseline code.
 """
 
 import argparse
@@ -18,7 +17,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, roc_auc_score
 import sys
 
-
 # -------------------------
 # Reproducibility
 # -------------------------
@@ -27,12 +25,11 @@ random.seed(SEED); np.random.seed(SEED)
 torch.manual_seed(SEED); torch.cuda.manual_seed_all(SEED)
 
 # -------------------------
-# Base FEATURES (score fields will be replaced by derived features)
+# Base FEATURES
 # -------------------------
 BASE_FEATURES = [
     "sex","handId","strengthId","spinId",
     "pointId","actionId","positionId","strikeId",
-    # scoreSelf/scoreOther will be replaced by capped versions and derived features
     "strikeNumber"
 ]
 PAD_TOKEN = 0
@@ -51,50 +48,130 @@ class RallyDataset(Dataset):
     def __getitem__(self, i): return self.X[i], self.yA[i], self.yP[i], self.yR[i], self.L[i]
 
 # -------------------------
-# LSTM-based MultiTask model
+# 特殊組件：自注意力機制層 (用作 Point 模型的最後一拍增強)
 # -------------------------
-class MultiTaskLSTM(nn.Module):
-    def __init__(self, num_tokens_per_feature, n_act, n_pt, emb_dim=16, hidden=128, num_layers=1, dropout=0.2, bidirectional=True):
+class AttentionLayer(nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.q = nn.Linear(dim, dim)
+        self.k = nn.Linear(dim, dim)
+        self.v = nn.Linear(dim, dim)
+        self.scale = math.sqrt(dim)
+        
+    def forward(self, x, mask=None, causal=True):
+        # x: (B, T, dim)
+        B, T, C = x.size()
+        Q = self.q(x)
+        K = self.k(x)
+        V = self.v(x)
+        
+        # 算出每一拍之間的關聯度 (B, T, T)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / self.scale
+        
+        # 1. 處理 Padding Mask (將補零的地方填為極小值)
+        if mask is not None:
+            scores = scores.masked_fill(mask == 0, -1e9)
+            
+        # 2. 【關鍵修改】加入因果遮罩，防止第 t 拍看到 t+1 拍以後的未來資訊
+        if causal:
+            causal_mask = torch.tril(torch.ones(T, T, device=x.device)).bool() # (T, T) 下三角為 True
+            scores = scores.masked_fill(~causal_mask.unsqueeze(0), -1e9) # 將右上角（未來）填為 -1e9
+            
+        attn_weights = torch.softmax(scores, dim=-1)
+        context = torch.matmul(attn_weights, V)
+        return context
+
+# -------------------------
+# 獨立模型 1：Action 模型 (深層 Bi-LSTM)
+# -------------------------
+class ActionModel(nn.Module):
+    def __init__(self, num_tokens_per_feature, n_act, emb_dim=16, hidden=256, num_layers=3, dropout=0.2):
         super().__init__()
         self.num_features = len(num_tokens_per_feature)
-        self.emb_dim = emb_dim
-        self.input_dim = self.num_features * emb_dim
-        self.hidden = hidden
-        self.num_layers = num_layers
-        self.bidirectional = bidirectional
-        self.num_directions = 2 if bidirectional else 1
-
-        # per-feature embeddings; num_tokens_per_feature already includes UNK
         self.embs = nn.ModuleList([
             nn.Embedding(n + 1, emb_dim, padding_idx=PAD_TOKEN) for n in num_tokens_per_feature
         ])
-
-        self.lstm = nn.LSTM(self.input_dim, hidden, num_layers=num_layers, batch_first=True,
-                            dropout=dropout if num_layers>1 else 0.0, bidirectional=bidirectional)
-
+        input_dim = self.num_features * emb_dim
+        
+        # 【關鍵修改】預測下一拍動作同樣強制使用單向 LSTM
+        self.lstm = nn.LSTM(input_dim, hidden, num_layers=num_layers, batch_first=True,
+                            dropout=dropout if num_layers > 1 else 0.0, bidirectional=False)
         self.drop = nn.Dropout(dropout)
-        self.act_head = nn.Linear(hidden * self.num_directions, n_act)
-        self.pt_head  = nn.Linear(hidden * self.num_directions, n_pt)
-        self.rly_head = nn.Linear(hidden * self.num_directions, 1)
+        num_directions = 1
+        self.act_head = nn.Linear(hidden * num_directions, n_act)
 
     def forward(self, X, lengths):
-        # X: (B, T, F)
-        B, T, F = X.size()
-        assert F == self.num_features
-        es = [emb(X[:,:,i]) for i,emb in enumerate(self.embs)]
-        x = torch.cat(es, dim=-1)  # (B, T, input_dim)
-
-        o, (hn, cn) = self.lstm(x)  # o: (B, T, hidden * num_directions)
+        es = [emb(X[:,:,i]) for i, emb in enumerate(self.embs)]
+        x = torch.cat(es, dim=-1)
+        o, _ = self.lstm(x)
         o = self.drop(o)
+        la = self.act_head(o)
+        return la
 
-        mask = (X[:,:,0] != PAD_TOKEN).float().unsqueeze(-1)  # (B, T, 1)
-        denom = mask.sum(dim=1).clamp(min=1.0)  # (B,1)
-        mean_hidden = (o * mask).sum(dim=1) / denom  # (B, hidden * num_directions)
+# -------------------------
+# 獨立模型 2：Point 模型 (Bi-LSTM + Attention 機制)
+# -------------------------
+class PointModel(nn.Module):
+    def __init__(self, num_tokens_per_feature, n_pt, emb_dim=16, hidden=256, num_layers=3, dropout=0.2):
+        super().__init__()
+        self.num_features = len(num_tokens_per_feature)
+        self.embs = nn.ModuleList([
+            nn.Embedding(n + 1, emb_dim, padding_idx=PAD_TOKEN) for n in num_tokens_per_feature
+        ])
+        input_dim = self.num_features * emb_dim
+        
+        # 【關鍵修改】預測下一拍落點是標準的 Causal 任務，強制使用單向 LSTM，嚴禁雙向偷看
+        self.lstm = nn.LSTM(input_dim, hidden, num_layers=num_layers, batch_first=True,
+                            dropout=dropout if num_layers > 1 else 0.0, bidirectional=False)
+        
+        num_directions = 1
+        self.attn = AttentionLayer(hidden * num_directions)
+        self.drop = nn.Dropout(dropout)
+        self.pt_head = nn.Linear(hidden * num_directions, n_pt)
 
-        la = self.act_head(o)  # token-level action logits (B, T, n_act)
-        lp = self.pt_head(o)   # token-level point logits (B, T, n_pt)
-        lr = self.rly_head(mean_hidden).squeeze(1)  # rally-level logit (B,)
-        return la, lp, lr
+    def forward(self, X, lengths):
+        es = [emb(X[:,:,i]) for i, emb in enumerate(self.embs)]
+        x = torch.cat(es, dim=-1)
+        o, _ = self.lstm(x)
+        
+        # Padding Mask (B, 1, T)
+        mask = (X[:, :, 0] != PAD_TOKEN).unsqueeze(1)
+        
+        # 【關鍵修改】啟用因果 Attention 機制
+        o_attn = self.attn(o, mask, causal=True)
+        o_attn = self.drop(o_attn)
+        lp = self.pt_head(o_attn)
+        return lp
+
+# -------------------------
+# 獨立模型 3：Rally 模型 (標準序列池化分類器)
+# -------------------------
+class RallyModel(nn.Module):
+    def __init__(self, num_tokens_per_feature, emb_dim=16, hidden=128, num_layers=1, dropout=0.2, bidirectional=True):
+        super().__init__()
+        self.num_features = len(num_tokens_per_feature)
+        self.embs = nn.ModuleList([
+            nn.Embedding(n + 1, emb_dim, padding_idx=PAD_TOKEN) for n in num_tokens_per_feature
+        ])
+        input_dim = self.num_features * emb_dim
+        self.lstm = nn.LSTM(input_dim, hidden, num_layers=num_layers, batch_first=True,
+                            dropout=dropout if num_layers > 1 else 0.0, bidirectional=bidirectional)
+        self.drop = nn.Dropout(dropout)
+        num_directions = 2 if bidirectional else 1
+        self.rly_head = nn.Linear(hidden * num_directions, 1)
+
+    def forward(self, X, lengths):
+        es = [emb(X[:,:,i]) for i, emb in enumerate(self.embs)]
+        x = torch.cat(es, dim=-1)
+        o, _ = self.lstm(x)
+        o = self.drop(o)
+        
+        mask = (X[:,:,0] != PAD_TOKEN).float().unsqueeze(-1)
+        denom = mask.sum(dim=1).clamp(min=1.0)
+        mean_hidden = (o * mask).sum(dim=1) / denom
+        
+        lr = self.rly_head(mean_hidden).squeeze(1)
+        return lr
 
 # -------------------------
 # Helper: padding functions
@@ -128,11 +205,10 @@ def normalize_scores(df, cap=11):
     return df
 
 # -------------------------
-# Main: data prep, model, train, inference
+# Main: data prep, independent models, train, inference
 # -------------------------
 def main(args):
-    # ===========  ==================================
-    # Custom Tee to log stdout to file
+    # =========== Log stdout to file =================
     class Tee(object):
         def __init__(self, *files):
             self.files = files
@@ -144,9 +220,11 @@ def main(args):
             for f in self.files:
                 f.flush()
 
+    import os
+    os.makedirs("result", exist_ok=True)
     log_file = open("result/log.txt", "w", encoding="utf-8")
     sys.stdout = Tee(sys.stdout, log_file)
-    # ===========  ==================================
+    # ================================================
 
     train = pd.read_csv(args.train)
     test  = pd.read_csv(args.test)
@@ -171,10 +249,10 @@ def main(args):
         for col in FEATURES:
             dtype = pd.CategoricalDtype(categories=cats[col])
             s = pd.Series(df[col])
-            codes = s.astype(dtype).cat.codes  # unseen -> -1
+            codes = s.astype(dtype).cat.codes
             unk_idx = len(cats[col])
             codes = codes.replace(-1, unk_idx)
-            codes = codes + 1  # shift so 0 reserved for PAD
+            codes = codes + 1
             outs.append(np.asarray(codes, dtype=np.int64))
         return np.stack(outs, axis=1)
 
@@ -190,6 +268,7 @@ def main(args):
     if len(X_list) == 0:
         raise RuntimeError("No training sequences constructed. Check train data and grouping by rally_uid.")
 
+    global MAXLEN
     MAXLEN = min(max(L_list), args.max_len)
 
     X_all  = np.stack([pad2d(s, MAXLEN) for s in X_list])
@@ -226,70 +305,119 @@ def main(args):
     num_tokens_per_feature = [len(cats[c]) + 1 for c in FEATURES]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model = MultiTaskLSTM(num_tokens_per_feature, n_act, n_pt,
-                         emb_dim=args.emb, hidden=args.hidden,
-                         num_layers=max(1,args.layers), dropout=args.drop,
-                         bidirectional=args.bidirectional).to(device)
+    # ---------------------------------------------------------
+    # 初始化三個完全獨立的專門模型
+    # ---------------------------------------------------------
+    # Action 模型設定為深層 Bi-LSTM (預設 args.layers + 1 增加深度)
+    # ---------------------------------------------------------
+    # 初始化三個完全獨立的專門模型（修正因果關係版）
+    # ---------------------------------------------------------
+    model_A = ActionModel(num_tokens_per_feature, n_act, emb_dim=args.emb, hidden=args.hidden,
+                          num_layers=args.layers + 1, dropout=args.drop).to(device)
+                          
+    model_P = PointModel(num_tokens_per_feature, n_pt, emb_dim=args.emb, hidden=args.hidden,
+                         num_layers=args.layers, dropout=args.drop).to(device)
+                         
+    # Rally 模型是預測整局誰得分，屬於全域分類，因此可以保持原有的雙向機制
+    model_R = RallyModel(num_tokens_per_feature, emb_dim=args.emb, hidden=args.hidden,
+                         num_layers=args.layers, dropout=args.drop, bidirectional=args.bidirectional).to(device)
 
     ce_action = nn.CrossEntropyLoss(ignore_index=-1, weight=act_w.to(device))
     ce_point  = nn.CrossEntropyLoss(ignore_index=-1, weight=pt_w.to(device))
     bce_rally = nn.BCEWithLogitsLoss()
-    opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    
+    # 宣告三個獨立模型各自的優化器
+    opt_A = torch.optim.Adam(model_A.parameters(), lr=args.lr)
+    opt_P = torch.optim.Adam(model_P.parameters(), lr=args.lr)
+    opt_R = torch.optim.Adam(model_R.parameters(), lr=args.lr)
 
+    print("--- 開始獨立模型同步訓練 ---")
     for ep in range(1, args.epochs+1):
-        model.train(); run_loss=0.0
-        for Xb,yAb,yPb,yRb,Lb in train_loader:
-            Xb,yAb,yPb,yRb,Lb = Xb.to(device),yAb.to(device),yPb.to(device),yRb.to(device),Lb.to(device)
-            opt.zero_grad()
-            la,lp,lr = model(Xb,Lb)
-            loss = 0.375*ce_action(la.view(-1,la.size(-1)), yAb.view(-1)) + 0.5*ce_point(lp.view(-1,lp.size(-1)), yPb.view(-1)) + 0.125*bce_rally(lr,yRb)
+        model_A.train(); model_P.train(); model_R.train()
+        run_loss = 0.0
+        for Xb, yAb, yPb, yRb, Lb in train_loader:
+            Xb, yAb, yPb, yRb, Lb = Xb.to(device), yAb.to(device), yPb.to(device), yRb.to(device), Lb.to(device)
+            
+            opt_A.zero_grad(); opt_P.zero_grad(); opt_R.zero_grad()
+            
+            la = model_A(Xb, Lb)
+            lp = model_P(Xb, Lb)
+            lr = model_R(Xb, Lb)
+            
+            loss_A = ce_action(la.view(-1, la.size(-1)), yAb.view(-1))
+            loss_P = ce_point(lp.view(-1, lp.size(-1)), yPb.view(-1))
+            loss_R = bce_rally(lr, yRb)
+            
+            loss = 0.375 * loss_A + 0.5 * loss_P + 0.125 * loss_R
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(),1.0)
-            opt.step()
-            run_loss += loss.item()*Xb.size(0)
+            
+            torch.nn.utils.clip_grad_norm_(model_A.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(model_P.parameters(), 1.0)
+            torch.nn.utils.clip_grad_norm_(model_R.parameters(), 1.0)
+            
+            opt_A.step(); opt_P.step(); opt_R.step()
+            run_loss += loss.item() * Xb.size(0)
 
-        model.eval(); val_loss=0.0
-        allA,allAp,allP,allPp,allR,allRp = [],[],[],[],[],[]
+        model_A.eval(); model_P.eval(); model_R.eval()
+        val_loss = 0.0
+        allA, allAp, allP, allPp, allR, allRp = [], [], [], [], [], []
         with torch.no_grad():
-            for Xb,yAb,yPb,yRb,Lb in val_loader:
-                Xb,yAb,yPb,yRb,Lb = Xb.to(device),yAb.to(device),yPb.to(device),yRb.to(device),Lb.to(device)
-                la,lp,lr = model(Xb,Lb)
-                loss = 0.4*ce_action(la.view(-1,la.size(-1)), yAb.view(-1)) + 0.4*ce_point(lp.view(-1,lp.size(-1)), yPb.view(-1)) + 0.2*bce_rally(lr,yRb)
-                val_loss += loss.item()*Xb.size(0)
+            for Xb, yAb, yPb, yRb, Lb in val_loader:
+                Xb, yAb, yPb, yRb, Lb = Xb.to(device), yAb.to(device), yPb.to(device), yRb.to(device), Lb.to(device)
+                
+                la = model_A(Xb, Lb)
+                lp = model_P(Xb, Lb)
+                lr = model_R(Xb, Lb)
+                
+                loss_A = ce_action(la.view(-1, la.size(-1)), yAb.view(-1))
+                loss_P = ce_point(lp.view(-1, lp.size(-1)), yPb.view(-1))
+                loss_R = bce_rally(lr, yRb)
+                
+                loss = 0.4 * loss_A + 0.4 * loss_P + 0.2 * loss_R
+                val_loss += loss.item() * Xb.size(0)
 
                 allR += yRb.detach().cpu().tolist(); allRp += torch.sigmoid(lr).detach().cpu().tolist()
                 yA_flat = yAb.view(-1).detach().cpu().numpy(); yP_flat = yPb.view(-1).detach().cpu().numpy()
                 a_pred = la.argmax(-1).view(-1).detach().cpu().numpy(); p_pred = lp.argmax(-1).view(-1).detach().cpu().numpy()
+                
                 mA = (yA_flat != -1); mP = (yP_flat != -1)
                 allA += yA_flat[mA].tolist(); allAp += a_pred[mA].tolist()
                 allP += yP_flat[mP].tolist(); allPp += p_pred[mP].tolist()
 
-        tr_loss = run_loss/len(train_loader.dataset); va_loss = val_loss/len(val_loader.dataset)
+        tr_loss = run_loss / len(train_loader.dataset); va_loss = val_loss / len(val_loader.dataset)
         try:
             f1A = f1_score(allA, allAp, average="macro") if len(allA) else 0.0
             f1P = f1_score(allP, allPp, average="macro") if len(allP) else 0.0
-            auc = roc_auc_score(allR, allRp) if len(set(allR))>1 else 0.5
+            auc = roc_auc_score(allR, allRp) if len(set(allR)) > 1 else 0.5
         except Exception:
-            f1A,f1P,auc = 0.0,0.0,0.5
-        final = 0.4*f1A + 0.4*f1P + 0.2*auc
+            f1A, f1P, auc = 0.0, 0.0, 0.5
+        final = 0.4 * f1A + 0.4 * f1P + 0.2 * auc
         print(f"[Epoch {ep}/{args.epochs}] train_loss={tr_loss:.4f} val_loss={va_loss:.4f} F1_action={f1A:.4f} F1_point={f1P:.4f} AUC={auc:.4f} Final~{final:.4f}")
 
-
+    print("--- 開始對測試集進行獨立預測推論 ---")
     pred_rows = []
+    model_A.eval(); model_P.eval(); model_R.eval()
     with torch.no_grad():
         for rid, g in test.groupby("rally_uid"):
             Xg = encode_frame_with_unk(g)
             Xp, T = pad2d_cap(Xg, MAXLEN)
-            X_t = torch.tensor(Xp[None,...], dtype=torch.long, device=device)
+            X_t = torch.tensor(Xp[None, ...], dtype=torch.long, device=device)
             L_t = torch.tensor([max(1, T)], dtype=torch.long, device=device)
-            la,lp,lr = model(X_t, L_t)
+            
+            # 各自呼叫專屬獨立模型獲取 Logits
+            la = model_A(X_t, L_t)
+            lp = model_P(X_t, L_t)
+            lr = model_R(X_t, L_t)
+            
             last_t = L_t.item() - 1
             a_idx = int(torch.argmax(la[0, last_t]).item())
             p_idx = int(torch.argmax(lp[0, last_t]).item())
+            # 使用 .item() 獲取標量，徹底杜絕 0維 Tensor 的索引報錯風險
             s_prob = float(torch.sigmoid(lr).item())
+            
             action_pred = int(act_classes[a_idx]) if a_idx < len(act_classes) else int(act_classes[-1])
             point_pred  = int(pt_classes[p_idx])  if p_idx < len(pt_classes)  else int(pt_classes[-1])
-            # append in requested order: rally_uid, actionId, pointId, serverGetPoint
+            
             pred_rows.append({"rally_uid": int(rid), "actionId": action_pred, "pointId": point_pred, "serverGetPoint": s_prob})
 
     pred_df = pd.DataFrame(pred_rows)
@@ -300,11 +428,10 @@ def main(args):
     else:
         out = pred_df
 
-    # ensure column order as requested
     cols_order = ["rally_uid", "actionId", "pointId", "serverGetPoint"]
     out = out.reindex(columns=[c for c in cols_order if c in out.columns])
-
     out.to_csv(args.out, index=False)
+    print(f"成功儲存獨立預測提交檔案至: {args.out}")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
@@ -324,7 +451,6 @@ if __name__ == "__main__":
     ap.add_argument("--cap", type=int, default=11)
     ap.add_argument("--bidirectional", type=bool, default=True)
     args = ap.parse_args()
-    # MAXLEN must be defined before inference; compute a safe default if not set by training
-    # We'll set a global MAXLEN based on args.max_len; training will override it
+    
     MAXLEN = args.max_len
     main(args)

@@ -1,8 +1,8 @@
 @echo off
 set PYTHON=python
-set SCRIPT="baseline code.py"
-@REM set SCRIPT=Transformer.py
-@REM set SCRIPT=Transformer2.py
+@REM set SCRIPT="baseline code.py"
+set SCRIPT="independent_task.py"
+
 set TRAIN_PATH=inputs/train.csv
 set TEST_PATH=inputs/test_new.csv
 set SAMPLE_PATH=result/sample_submission.csv

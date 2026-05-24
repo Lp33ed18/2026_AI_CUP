@@ -144,7 +144,7 @@ def main(args):
             for f in self.files:
                 f.flush()
 
-    log_file = open("result/log.txt", "w", encoding="utf-8")
+    log_file = open("result/log.txt", "a", encoding="utf-8")
     sys.stdout = Tee(sys.stdout, log_file)
     # ===========  ==================================
 
