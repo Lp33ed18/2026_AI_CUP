@@ -1,0 +1,10 @@
+[Epoch 1/9] train_loss=0.5513 val_loss=0.1784 F1_action=0.4639 F1_point=1.0000 AUC=0.5083 Final~0.6872
+[Epoch 2/9] train_loss=0.1119 val_loss=0.1368 F1_action=1.0000 F1_point=1.0000 AUC=0.6551 Final~0.9310
+[Epoch 3/9] train_loss=0.0903 val_loss=0.1217 F1_action=1.0000 F1_point=1.0000 AUC=0.6571 Final~0.9314
+[Epoch 4/9] train_loss=0.0820 val_loss=0.1138 F1_action=1.0000 F1_point=1.0000 AUC=0.8310 Final~0.9662
+[Epoch 5/9] train_loss=0.0769 val_loss=0.1072 F1_action=1.0000 F1_point=1.0000 AUC=0.9129 Final~0.9826
+[Epoch 6/9] train_loss=0.0704 val_loss=0.0928 F1_action=1.0000 F1_point=1.0000 AUC=0.9591 Final~0.9918
+[Epoch 7/9] train_loss=0.0529 val_loss=0.0567 F1_action=1.0000 F1_point=1.0000 AUC=0.9912 Final~0.9982
+[Epoch 8/9] train_loss=0.0341 val_loss=0.0374 F1_action=1.0000 F1_point=1.0000 AUC=0.9943 Final~0.9989
+[Epoch 9/9] train_loss=0.0252 val_loss=0.0267 F1_action=1.0000 F1_point=1.0000 AUC=0.9959 Final~0.9992
+Saved predictions to result/submission.csv

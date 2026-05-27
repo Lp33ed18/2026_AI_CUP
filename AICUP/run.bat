@@ -1,7 +1,10 @@
 @echo off
 set PYTHON=python
 @REM set SCRIPT="baseline code.py"
-set SCRIPT="independent_task.py"
+@REM set SCRIPT="independent_task.py"
+@REM set SCRIPT="independent_task_three_LSTM.py"
+@REM set SCRIPT="GNN.py"
+set SCRIPT="KNN.py"
 
 set TRAIN_PATH=inputs/train.csv
 set TEST_PATH=inputs/test_new.csv

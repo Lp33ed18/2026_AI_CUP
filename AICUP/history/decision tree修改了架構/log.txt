@@ -1,0 +1,23 @@
+--- Pretraining Action & Rally for 3 epochs to produce meaningful hidden features ---
+[Pretrain Epoch 1/3] train_loss=2.2259
+[Pretrain Epoch 2/3] train_loss=1.9873
+[Pretrain Epoch 3/3] train_loss=1.7335
+--- Pretraining done ---
+--- 正在為 XGBoost 生成時序特徵 (Lag Features + LSTM hidden vectors) ---
+Extracting LSTM hidden vectors for training set (this may take time and memory)...
+XGBoost 訓練集樣本數: 62588, 驗證集樣本數: 7124
+--- 開始訓練 pointId 的 XGBoost 模型 ---
+XGBoost 訓練完成！直接生成驗證集預測結果...
+--- 開始 PyTorch 獨立模型同步訓練 (Action & Rally) ---
+[Epoch 1/9] train_loss=1.6256 val_loss=1.5153 F1_action=0.2315 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.3740
+[Epoch 2/9] train_loss=1.5634 val_loss=1.4660 F1_action=0.2540 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.3830
+[Epoch 3/9] train_loss=1.5188 val_loss=1.4286 F1_action=0.2759 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.3918
+[Epoch 4/9] train_loss=1.4837 val_loss=1.4089 F1_action=0.2819 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.3942
+[Epoch 5/9] train_loss=1.4589 val_loss=1.3761 F1_action=0.2878 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.3966
+[Epoch 6/9] train_loss=1.4299 val_loss=1.3584 F1_action=0.3024 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.4024
+[Epoch 7/9] train_loss=1.4092 val_loss=1.3366 F1_action=0.3032 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.4027
+[Epoch 8/9] train_loss=1.3879 val_loss=1.3191 F1_action=0.3178 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.4086
+[Epoch 9/9] train_loss=1.3745 val_loss=1.3174 F1_action=0.3266 F1_point(XGB)=0.2041 AUC=0.9989 Final~0.4121
+--- 開始對測試集進行混合模型推論 ---
+Extracting LSTM hidden vectors for test set (this may take time)...
+成功儲存強效混合模型預測提交檔案至: result/submission.csv

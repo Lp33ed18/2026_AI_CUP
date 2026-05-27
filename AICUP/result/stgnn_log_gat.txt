@@ -1,0 +1,20 @@
+[Epoch 1/9] train_loss=1.1603 val_loss=1.0612 F1_action=0.0826 F1_point=1.0000 AUC=0.9911 Final~0.6313
+Saved best model (epoch 1) to result\best_stgnn_gat.pth
+[Epoch 2/9] train_loss=0.9332 val_loss=0.9726 F1_action=0.1189 F1_point=1.0000 AUC=0.9964 Final~0.6469
+Saved best model (epoch 2) to result\best_stgnn_gat.pth
+[Epoch 3/9] train_loss=0.8641 val_loss=0.9145 F1_action=0.1345 F1_point=1.0000 AUC=0.9978 Final~0.6533
+Saved best model (epoch 3) to result\best_stgnn_gat.pth
+[Epoch 4/9] train_loss=0.8231 val_loss=0.8811 F1_action=0.1569 F1_point=1.0000 AUC=0.9984 Final~0.6625
+Saved best model (epoch 4) to result\best_stgnn_gat.pth
+[Epoch 5/9] train_loss=0.7922 val_loss=0.8629 F1_action=0.1555 F1_point=1.0000 AUC=0.9986 Final~0.6619
+[Epoch 6/9] train_loss=0.7770 val_loss=0.8490 F1_action=0.1743 F1_point=1.0000 AUC=0.9987 Final~0.6694
+Saved best model (epoch 6) to result\best_stgnn_gat.pth
+[Epoch 7/9] train_loss=0.7662 val_loss=0.8407 F1_action=0.1754 F1_point=1.0000 AUC=0.9988 Final~0.6699
+Saved best model (epoch 7) to result\best_stgnn_gat.pth
+[Epoch 8/9] train_loss=0.7563 val_loss=0.8392 F1_action=0.1756 F1_point=1.0000 AUC=0.9988 Final~0.6700
+Saved best model (epoch 8) to result\best_stgnn_gat.pth
+[Epoch 9/9] train_loss=0.7582 val_loss=0.8383 F1_action=0.1778 F1_point=1.0000 AUC=0.9988 Final~0.6709
+Saved best model (epoch 9) to result\best_stgnn_gat.pth
+Training finished. Best final=0.6709 at epoch 9
+Loaded best model from result\best_stgnn_gat.pth for inference (final=0.6709)
+Saved predictions to result/submission.csv
