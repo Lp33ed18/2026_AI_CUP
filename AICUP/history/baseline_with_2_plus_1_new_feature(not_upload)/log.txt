@@ -1,0 +1,45 @@
+[Epoch 1/30] train_loss=1.8624 val_loss=1.3860 F1_action=0.1814 F1_point=0.0796 AUC=0.6843 Final~0.2412
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.2412)
+[Epoch 2/30] train_loss=1.3773 val_loss=1.0468 F1_action=0.1982 F1_point=0.0807 AUC=0.6741 Final~0.2464
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.2464)
+[Epoch 3/30] train_loss=1.1173 val_loss=0.8320 F1_action=0.2203 F1_point=0.0749 AUC=0.7041 Final~0.2589
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.2589)
+[Epoch 4/30] train_loss=0.9354 val_loss=0.6304 F1_action=0.2874 F1_point=0.0848 AUC=0.7477 Final~0.2984
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.2984)
+[Epoch 5/30] train_loss=0.8107 val_loss=0.4936 F1_action=0.2703 F1_point=0.0871 AUC=0.7776 Final~0.2985
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.2985)
+[Epoch 6/30] train_loss=0.7285 val_loss=0.4194 F1_action=0.2821 F1_point=0.0973 AUC=0.8196 Final~0.3157
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.3157)
+[Epoch 7/30] train_loss=0.6891 val_loss=0.3894 F1_action=0.2998 F1_point=0.0922 AUC=0.7981 Final~0.3164
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.3164)
+[Epoch 8/30] train_loss=0.6633 val_loss=0.3398 F1_action=0.2910 F1_point=0.0955 AUC=0.8486 Final~0.3243
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.3243)
+[Epoch 9/30] train_loss=0.6408 val_loss=0.3363 F1_action=0.2699 F1_point=0.0925 AUC=0.8368 Final~0.3123
+[Epoch 10/30] train_loss=0.6394 val_loss=0.3336 F1_action=0.3088 F1_point=0.0944 AUC=0.8317 Final~0.3276
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.3276)
+[Epoch 11/30] train_loss=0.6067 val_loss=0.3156 F1_action=0.2931 F1_point=0.1013 AUC=0.8368 Final~0.3251
+[Epoch 12/30] train_loss=0.6070 val_loss=0.3068 F1_action=0.2903 F1_point=0.0944 AUC=0.8609 Final~0.3261
+[Epoch 13/30] train_loss=0.5939 val_loss=0.3091 F1_action=0.3168 F1_point=0.0995 AUC=0.8992 Final~0.3464
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.3464)
+[Epoch 14/30] train_loss=0.5956 val_loss=0.2966 F1_action=0.3219 F1_point=0.0912 AUC=0.8721 Final~0.3397
+[Epoch 15/30] train_loss=0.6080 val_loss=0.3139 F1_action=0.3259 F1_point=0.0866 AUC=0.8739 Final~0.3398
+[Epoch 16/30] train_loss=0.5770 val_loss=0.3001 F1_action=0.2828 F1_point=0.0932 AUC=0.8847 Final~0.3273
+[Epoch 17/30] train_loss=0.5834 val_loss=0.3048 F1_action=0.2949 F1_point=0.0872 AUC=0.8792 Final~0.3287
+[Epoch 18/30] train_loss=0.5845 val_loss=0.3024 F1_action=0.3362 F1_point=0.0867 AUC=0.9195 Final~0.3531
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.3531)
+[Epoch 19/30] train_loss=0.5662 val_loss=0.3038 F1_action=0.3089 F1_point=0.0850 AUC=0.8889 Final~0.3353
+[Epoch 20/30] train_loss=0.5782 val_loss=0.2810 F1_action=0.3071 F1_point=0.0929 AUC=0.9073 Final~0.3415
+[Epoch 21/30] train_loss=0.5698 val_loss=0.2879 F1_action=0.3049 F1_point=0.0904 AUC=0.9145 Final~0.3410
+[Epoch 22/30] train_loss=0.5693 val_loss=0.2782 F1_action=0.3316 F1_point=0.0946 AUC=0.8988 Final~0.3503
+[Epoch 23/30] train_loss=0.5575 val_loss=0.2854 F1_action=0.2971 F1_point=0.0932 AUC=0.9183 Final~0.3398
+[Epoch 24/30] train_loss=0.5532 val_loss=0.2784 F1_action=0.3148 F1_point=0.0942 AUC=0.9400 Final~0.3516
+[Epoch 25/30] train_loss=0.5590 val_loss=0.2761 F1_action=0.3336 F1_point=0.0938 AUC=0.8998 Final~0.3509
+[Epoch 26/30] train_loss=0.5384 val_loss=0.2852 F1_action=0.3363 F1_point=0.0995 AUC=0.9277 Final~0.3598
+--> 偵測到更好的模型！權重已儲存 (Best Final: 0.3598)
+[Epoch 27/30] train_loss=0.5570 val_loss=0.2767 F1_action=0.3115 F1_point=0.0942 AUC=0.9187 Final~0.3460
+[Epoch 28/30] train_loss=0.5482 val_loss=0.2815 F1_action=0.3181 F1_point=0.0913 AUC=0.9051 Final~0.3448
+[Epoch 29/30] train_loss=0.5430 val_loss=0.2840 F1_action=0.3050 F1_point=0.0875 AUC=0.9354 Final~0.3441
+[Epoch 30/30] train_loss=0.5574 val_loss=0.2797 F1_action=0.3281 F1_point=0.0898 AUC=0.8964 Final~0.3464
+
+正在載入最高 Final 分數 (0.3598) 的最佳模型權重進行推論...
+推論完成！最優模型預測結果已儲存至: result/submission.csv

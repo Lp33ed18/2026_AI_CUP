@@ -1,6 +1,6 @@
 # run_lstm_final.py
 """
-LSTM baseline with UNK handling and score normalization.
+LSTM baseline with UNK handling, score normalization, Random Truncation, and Last-token Validation Alignment.
 Save as run_lstm_final.py and run:
 python run_lstm_final.py --train train.csv --test test.csv --sample sample_submission.csv --out submission.csv
 """
@@ -41,14 +41,40 @@ PAD_TOKEN = 0
 # Dataset
 # -------------------------
 class RallyDataset(Dataset):
-    def __init__(self, X, yA, yP, yR, L):
+    # 💡【修改】引入 is_train 參數來控制是否啟用隨機截斷
+    def __init__(self, X, yA, yP, yR, L, is_train=False):
         self.X = torch.tensor(X, dtype=torch.long)
         self.yA = torch.tensor(yA, dtype=torch.long)
         self.yP = torch.tensor(yP, dtype=torch.long)
         self.yR = torch.tensor(yR, dtype=torch.float32)
         self.L  = torch.tensor(L,  dtype=torch.long)
-    def __len__(self): return self.X.shape[0]
-    def __getitem__(self, i): return self.X[i], self.yA[i], self.yP[i], self.yR[i], self.L[i]
+        self.is_train = is_train
+
+    def __len__(self): 
+        return self.X.shape[0]
+
+    def __getitem__(self, i):
+        X = self.X[i].clone()
+        yA = self.yA[i].clone()
+        yP = self.yP[i].clone()
+        yR = self.yR[i]
+        L  = self.L[i]
+
+        # 💡【新增】訓練集隨機截斷 (Random Sequence Truncation)
+        # 強迫模型在訓練時從隨機時間點（未完結的打球局勢）預測這回合誰贏，防止 AUC 虛高
+        if self.is_train and L > 1:
+            trunc_len = random.randint(1, L.item())
+            
+            # 將隨機截斷點之後的特徵全部清空為 PAD_TOKEN (0)
+            X[trunc_len:] = PAD_TOKEN
+            # 將隨機截斷點之後的 Token 級別標籤設為 -1 (CrossEntropyLoss 會自動 ignore)
+            yA[trunc_len:] = -1
+            yP[trunc_len:] = -1
+            
+            # 更新此樣本的有效長度
+            L = torch.tensor(trunc_len, dtype=torch.long)
+
+        return X, yA, yP, yR, L
 
 # -------------------------
 # LSTM-based MultiTask model
@@ -218,8 +244,9 @@ def main(args):
     act_w = torch.tensor(1.0/act_counts, dtype=torch.float32); act_w = (act_w * (n_act/act_w.sum()))
     pt_w  = torch.tensor(1.0/pt_counts,  dtype=torch.float32); pt_w  = (pt_w  * (n_pt /pt_w.sum()))
 
-    train_ds = RallyDataset(X_tr, yA_tr, yP_tr, yR_tr, L_tr)
-    val_ds   = RallyDataset(X_va, yA_va, yP_va, yR_va, L_va)
+    # 💡【修改】顯式指定 train_ds 使用隨機截斷 (is_train=True)，而 val_ds 保持完整不截斷 (is_train=False)
+    train_ds = RallyDataset(X_tr, yA_tr, yP_tr, yR_tr, L_tr, is_train=True)
+    val_ds   = RallyDataset(X_va, yA_va, yP_va, yR_va, L_va, is_train=False)
     train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True)
     val_loader   = DataLoader(val_ds,   batch_size=max(args.batch*2,128), shuffle=False)
 
@@ -258,11 +285,21 @@ def main(args):
                 val_loss += loss.item()*Xb.size(0)
 
                 allR += yRb.detach().cpu().tolist(); allRp += torch.sigmoid(lr).detach().cpu().tolist()
-                yA_flat = yAb.view(-1).detach().cpu().numpy(); yP_flat = yPb.view(-1).detach().cpu().numpy()
-                a_pred = la.argmax(-1).view(-1).detach().cpu().numpy(); p_pred = lp.argmax(-1).view(-1).detach().cpu().numpy()
-                mA = (yA_flat != -1); mP = (yP_flat != -1)
-                allA += yA_flat[mA].tolist(); allAp += a_pred[mA].tolist()
-                allP += yP_flat[mP].tolist(); allPp += p_pred[mP].tolist()
+                
+                # 💡【修改】驗證集評估邏輯對齊 LB 計分標準：僅抽取每一局的「最後一個有效拍」來計算 F1
+                yA_np = yAb.detach().cpu().numpy()
+                yP_np = yPb.detach().cpu().numpy()
+                a_pred = la.argmax(-1).detach().cpu().numpy()
+                p_pred = lp.argmax(-1).detach().cpu().numpy()
+                L_np = Lb.detach().cpu().numpy()
+                
+                for b in range(Xb.size(0)):
+                    last_idx = L_np[b] - 1  # 找到未補零前的最後一個有效位置
+                    if last_idx >= 0:
+                        allA.append(yA_np[b, last_idx])
+                        allAp.append(a_pred[b, last_idx])
+                        allP.append(yP_np[b, last_idx])
+                        allPp.append(p_pred[b, last_idx])
 
         tr_loss = run_loss/len(train_loader.dataset); va_loss = val_loss/len(val_loader.dataset)
         try:

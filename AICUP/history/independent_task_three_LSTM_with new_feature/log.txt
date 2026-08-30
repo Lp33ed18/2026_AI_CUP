@@ -1,0 +1,33 @@
+[Epoch 1/30] train_loss=1.9431 val_loss=1.4059 F1_action=0.1452 F1_point=0.0445 AUC=0.7470 Final~0.2253
+[Epoch 2/30] train_loss=1.4043 val_loss=1.0694 F1_action=0.2008 F1_point=0.0769 AUC=0.8070 Final~0.2725
+[Epoch 3/30] train_loss=1.1788 val_loss=0.8917 F1_action=0.2249 F1_point=0.0792 AUC=0.8994 Final~0.3015
+[Epoch 4/30] train_loss=0.9979 val_loss=0.7034 F1_action=0.2502 F1_point=0.0788 AUC=0.8669 Final~0.3050
+[Epoch 5/30] train_loss=0.8960 val_loss=0.5660 F1_action=0.2703 F1_point=0.0935 AUC=0.9600 Final~0.3375
+[Epoch 6/30] train_loss=0.7979 val_loss=0.4722 F1_action=0.2644 F1_point=0.0879 AUC=0.9383 Final~0.3286
+[Epoch 7/30] train_loss=0.7404 val_loss=0.4145 F1_action=0.2746 F1_point=0.0902 AUC=0.9580 Final~0.3375
+[Epoch 8/30] train_loss=0.6913 val_loss=0.3788 F1_action=0.2856 F1_point=0.0820 AUC=0.9687 Final~0.3408
+[Epoch 9/30] train_loss=0.6530 val_loss=0.3394 F1_action=0.3099 F1_point=0.0893 AUC=0.9474 Final~0.3491
+[Epoch 10/30] train_loss=0.6527 val_loss=0.3259 F1_action=0.3017 F1_point=0.0884 AUC=0.8998 Final~0.3360
+[Epoch 11/30] train_loss=0.6325 val_loss=0.3085 F1_action=0.2918 F1_point=0.0939 AUC=0.9588 Final~0.3461
+[Epoch 12/30] train_loss=0.6192 val_loss=0.3092 F1_action=0.3018 F1_point=0.1056 AUC=0.9278 Final~0.3485
+[Epoch 13/30] train_loss=0.6209 val_loss=0.2997 F1_action=0.3064 F1_point=0.0936 AUC=0.9487 Final~0.3497
+[Epoch 14/30] train_loss=0.6004 val_loss=0.3038 F1_action=0.2909 F1_point=0.0850 AUC=0.9531 Final~0.3410
+[Epoch 15/30] train_loss=0.6044 val_loss=0.2949 F1_action=0.3126 F1_point=0.0870 AUC=0.9519 Final~0.3502
+[Epoch 16/30] train_loss=0.5932 val_loss=0.2854 F1_action=0.3251 F1_point=0.0889 AUC=0.9443 Final~0.3545
+[Epoch 17/30] train_loss=0.6027 val_loss=0.2872 F1_action=0.2793 F1_point=0.0911 AUC=0.9326 Final~0.3347
+[Epoch 18/30] train_loss=0.5825 val_loss=0.2785 F1_action=0.2999 F1_point=0.0897 AUC=0.9464 Final~0.3451
+[Epoch 19/30] train_loss=0.5657 val_loss=0.2811 F1_action=0.2857 F1_point=0.0858 AUC=0.9451 Final~0.3376
+[Epoch 20/30] train_loss=0.5866 val_loss=0.2757 F1_action=0.2948 F1_point=0.0915 AUC=0.9313 Final~0.3408
+[Epoch 21/30] train_loss=0.5713 val_loss=0.2802 F1_action=0.3339 F1_point=0.0918 AUC=0.9128 Final~0.3528
+[Epoch 22/30] train_loss=0.5678 val_loss=0.2868 F1_action=0.3073 F1_point=0.0866 AUC=0.8975 Final~0.3371
+[Epoch 23/30] train_loss=0.5755 val_loss=0.2875 F1_action=0.3057 F1_point=0.0885 AUC=0.9198 Final~0.3416
+[Epoch 24/30] train_loss=0.5638 val_loss=0.2923 F1_action=0.3132 F1_point=0.0903 AUC=0.9032 Final~0.3420
+[Epoch 25/30] train_loss=0.5530 val_loss=0.2960 F1_action=0.2952 F1_point=0.0940 AUC=0.9059 Final~0.3368
+[Epoch 26/30] train_loss=0.5422 val_loss=0.2746 F1_action=0.3238 F1_point=0.0930 AUC=0.9013 Final~0.3470
+[Epoch 27/30] train_loss=0.5579 val_loss=0.2791 F1_action=0.3008 F1_point=0.0938 AUC=0.9079 Final~0.3394
+[Epoch 28/30] train_loss=0.5417 val_loss=0.3066 F1_action=0.3048 F1_point=0.0845 AUC=0.8949 Final~0.3347
+[Epoch 29/30] train_loss=0.5493 val_loss=0.2969 F1_action=0.3317 F1_point=0.0877 AUC=0.8794 Final~0.3436
+[Epoch 30/30] train_loss=0.5507 val_loss=0.2951 F1_action=0.2993 F1_point=0.0838 AUC=0.8808 Final~0.3294
+
+正在載入最高 Final 分數 (0.3545) 的最佳獨立模型權重進行推論...
+獨立預測推論完成！預測結果已儲存至: result/submission.csv

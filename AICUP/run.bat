@@ -3,8 +3,15 @@ set PYTHON=python
 @REM set SCRIPT="baseline code.py"
 @REM set SCRIPT="independent_task.py"
 @REM set SCRIPT="independent_task_three_LSTM.py"
+
+@REM set SCRIPT="baseline_with_new_feature.py"
+
+set SCRIPT="decision_tree_with_4_past_feature.py"
+
+
+@REM set SCRIPT="independent_task_three_LSTM_with_new_feature.py"
 @REM set SCRIPT="GNN.py"
-set SCRIPT="KNN.py"
+@REM set SCRIPT="KNN.py"
 
 set TRAIN_PATH=inputs/train.csv
 set TEST_PATH=inputs/test_new.csv

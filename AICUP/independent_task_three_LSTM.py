@@ -1,7 +1,7 @@
 # run_independent_lstm.py
 """
 Independent Multi-Model Training with UNK handling and score normalization.
-Based on the provided baseline code.
+Enhanced with Random Sequence Truncation and Last-token Validation Alignment.
 """
 
 import argparse
@@ -39,14 +39,40 @@ PAD_TOKEN = 0
 # Dataset
 # -------------------------
 class RallyDataset(Dataset):
-    def __init__(self, X, yA, yP, yR, L):
+    # 💡【修改】引入 is_train 參數來控制是否啟用隨機截斷
+    def __init__(self, X, yA, yP, yR, L, is_train=False):
         self.X = torch.tensor(X, dtype=torch.long)
         self.yA = torch.tensor(yA, dtype=torch.long)
         self.yP = torch.tensor(yP, dtype=torch.long)
         self.yR = torch.tensor(yR, dtype=torch.float32)
         self.L  = torch.tensor(L,  dtype=torch.long)
-    def __len__(self): return self.X.shape[0]
-    def __getitem__(self, i): return self.X[i], self.yA[i], self.yP[i], self.yR[i], self.L[i]
+        self.is_train = is_train
+
+    def __len__(self): 
+        return self.X.shape[0]
+
+    def __getitem__(self, i):
+        X = self.X[i].clone()
+        yA = self.yA[i].clone()
+        yP = self.yP[i].clone()
+        yR = self.yR[i]
+        L  = self.L[i]
+
+        # 💡【新增】訓練集隨機截斷 (Random Sequence Truncation)
+        # 強迫模型在訓練時從隨機時間點（未完結的打球局勢）預測這回合誰贏與下一拍落點/動作，防止 AUC 與 F1 虛高
+        if self.is_train and L > 1:
+            trunc_len = random.randint(1, L.item())
+            
+            # 將隨機截斷點之後的特徵全部清空為 PAD_TOKEN (0)
+            X[trunc_len:] = PAD_TOKEN
+            # 將隨機截斷點之後的 Token 級別標籤設為 -1 (CrossEntropyLoss 會自動 ignore)
+            yA[trunc_len:] = -1
+            yP[trunc_len:] = -1
+            
+            # 更新此樣本的有效長度
+            L = torch.tensor(trunc_len, dtype=torch.long)
+
+        return X, yA, yP, yR, L
 
 # -------------------------
 # 特殊組件：自注意力機制層 (用作 Point 模型的最後一拍增強)
@@ -73,7 +99,7 @@ class AttentionLayer(nn.Module):
         if mask is not None:
             scores = scores.masked_fill(mask == 0, -1e9)
             
-        # 2. 【關鍵修改】加入因果遮罩，防止第 t 拍看到 t+1 拍以後的未來資訊
+        # 2. 加入因果遮罩，防止第 t 拍看到 t+1 拍以後的未來資訊
         if causal:
             causal_mask = torch.tril(torch.ones(T, T, device=x.device)).bool() # (T, T) 下三角為 True
             scores = scores.masked_fill(~causal_mask.unsqueeze(0), -1e9) # 將右上角（未來）填為 -1e9
@@ -94,7 +120,6 @@ class ActionModel(nn.Module):
         ])
         input_dim = self.num_features * emb_dim
         
-        # 【關鍵修改】預測下一拍動作同樣強制使用單向 LSTM
         self.lstm = nn.LSTM(input_dim, hidden, num_layers=num_layers, batch_first=True,
                             dropout=dropout if num_layers > 1 else 0.0, bidirectional=False)
         self.drop = nn.Dropout(dropout)
@@ -113,7 +138,7 @@ class ActionModel(nn.Module):
 # 獨立模型 2：Point 模型 (Bi-LSTM + Attention 機制)
 # -------------------------
 class PointModel(nn.Module):
-    def __init__(self, num_tokens_per_feature, n_pt, emb_dim=16, hidden=256, num_layers=2, dropout=0.2):
+    def __init__(self, num_tokens_per_feature, n_pt, emb_dim=16, hidden=512, num_layers=2, dropout=0.2):
         super().__init__()
         self.num_features = len(num_tokens_per_feature)
         self.embs = nn.ModuleList([
@@ -121,7 +146,6 @@ class PointModel(nn.Module):
         ])
         input_dim = self.num_features * emb_dim
         
-        # 【關鍵修改】預測下一拍落點是標準的 Causal 任務，強制使用單向 LSTM，嚴禁雙向偷看
         self.lstm = nn.LSTM(input_dim, hidden, num_layers=num_layers, batch_first=True,
                             dropout=dropout if num_layers > 1 else 0.0, bidirectional=False)
         
@@ -138,7 +162,7 @@ class PointModel(nn.Module):
         # Padding Mask (B, 1, T)
         mask = (X[:, :, 0] != PAD_TOKEN).unsqueeze(1)
         
-        # 【關鍵修改】啟用因果 Attention 機制
+        # 啟用因果 Attention 機制
         o_attn = self.attn(o, mask, causal=True)
         o_attn = self.drop(o_attn)
         lp = self.pt_head(o_attn)
@@ -148,7 +172,7 @@ class PointModel(nn.Module):
 # 獨立模型 3：Rally 模型 (標準序列池化分類器)
 # -------------------------
 class RallyModel(nn.Module):
-    def __init__(self, num_tokens_per_feature, emb_dim=16, hidden=128, num_layers=1, dropout=0.5, bidirectional=False):
+    def __init__(self, num_tokens_per_feature, emb_dim=16, hidden=128, num_layers=1, dropout=0.2, bidirectional=False):
         super().__init__()
         self.num_features = len(num_tokens_per_feature)
         self.embs = nn.ModuleList([
@@ -298,33 +322,23 @@ def main(args):
     act_w = torch.tensor(1.0/act_counts, dtype=torch.float32); act_w = (act_w * (n_act/act_w.sum()))
     pt_w  = torch.tensor(1.0/pt_counts,  dtype=torch.float32); pt_w  = (pt_w  * (n_pt /pt_w.sum()))
 
-    train_ds = RallyDataset(X_tr, yA_tr, yP_tr, yR_tr, L_tr)
-    val_ds   = RallyDataset(X_va, yA_va, yP_va, yR_va, L_va)
+    # 💡【修改】顯式指定 train_ds 使用隨機截斷 (is_train=True)，而 val_ds 保持完整不截斷 (is_train=False)
+    train_ds = RallyDataset(X_tr, yA_tr, yP_tr, yR_tr, L_tr, is_train=True)
+    val_ds   = RallyDataset(X_va, yA_va, yP_va, yR_va, L_va, is_train=False)
     train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True)
     val_loader   = DataLoader(val_ds,   batch_size=max(args.batch*2,128), shuffle=False)
 
     num_tokens_per_feature = [len(cats[c]) + 1 for c in FEATURES]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # ---------------------------------------------------------
-    # 初始化三個完全獨立的專門模型
-    # ---------------------------------------------------------
-    # Action 模型設定為深層 Bi-LSTM (預設 args.layers + 1 增加深度)
-    # ---------------------------------------------------------
-    # 初始化三個完全獨立的專門模型（修正因果關係版）
-    # ---------------------------------------------------------
     model_A = ActionModel(num_tokens_per_feature, n_act).to(device)
-                          
     model_P = PointModel(num_tokens_per_feature, n_pt).to(device)
-                         
-    # Rally 模型是預測整局誰得分，屬於全域分類，因此可以保持原有的雙向機制
     model_R = RallyModel(num_tokens_per_feature).to(device)
 
     ce_action = nn.CrossEntropyLoss(ignore_index=-1, weight=act_w.to(device))
     ce_point  = nn.CrossEntropyLoss(ignore_index=-1, weight=pt_w.to(device))
     bce_rally = nn.BCEWithLogitsLoss()
     
-    # 宣告三個獨立模型各自的優化器
     opt_A = torch.optim.Adam(model_A.parameters(), lr=args.lr)
     opt_P = torch.optim.Adam(model_P.parameters(), lr=args.lr)
     opt_R = torch.optim.Adam(model_R.parameters(), lr=args.lr)
@@ -378,12 +392,21 @@ def main(args):
                 val_loss += loss.item() * Xb.size(0)
 
                 allR += yRb.detach().cpu().tolist(); allRp += torch.sigmoid(lr).detach().cpu().tolist()
-                yA_flat = yAb.view(-1).detach().cpu().numpy(); yP_flat = yPb.view(-1).detach().cpu().numpy()
-                a_pred = la.argmax(-1).view(-1).detach().cpu().numpy(); p_pred = lp.argmax(-1).view(-1).detach().cpu().numpy()
                 
-                mA = (yA_flat != -1); mP = (yP_flat != -1)
-                allA += yA_flat[mA].tolist(); allAp += a_pred[mA].tolist()
-                allP += yP_flat[mP].tolist(); allPp += p_pred[mP].tolist()
+                # 💡【修改】驗證集評估邏輯對齊 LB：僅抽取每一局的「最後一個有效拍」來計算 F1 分數
+                yA_np = yAb.detach().cpu().numpy()
+                yP_np = yPb.detach().cpu().numpy()
+                a_pred = la.argmax(-1).detach().cpu().numpy()
+                p_pred = lp.argmax(-1).detach().cpu().numpy()
+                L_np = Lb.detach().cpu().numpy()
+                
+                for b in range(Xb.size(0)):
+                    last_idx = L_np[b] - 1  # 找到未補零前的最後一個有效位置
+                    if last_idx >= 0:
+                        allA.append(yA_np[b, last_idx])
+                        allAp.append(a_pred[b, last_idx])
+                        allP.append(yP_np[b, last_idx])
+                        allPp.append(p_pred[b, last_idx])
 
         tr_loss = run_loss / len(train_loader.dataset); va_loss = val_loss / len(val_loader.dataset)
         try:
@@ -393,7 +416,6 @@ def main(args):
         except Exception:
             f1A, f1P, auc = 0.0, 0.0, 0.5
         final = 0.4 * f1A + 0.4 * f1P + 0.2 * auc
-        # print(f"[Epoch {ep}/{args.epochs}] train_loss={tr_loss:.4f} val_loss={va_loss:.4f} F1_action={f1A:.4f} F1_point={f1P:.4f} AUC={auc:.4f} Final~{final:.4f}")
         current_lr_A = opt_A.param_groups[0]['lr']
         print(f"[Epoch {ep}/{args.epochs}] LR_A={current_lr_A:.6f} | train_loss={tr_loss:.4f} val_loss={va_loss:.4f} F1_action={f1A:.4f} F1_point(XGB)={f1P:.4f} AUC={auc:.4f} Final~{final:.4f}")
         scheduler_A.step()
@@ -409,7 +431,6 @@ def main(args):
             X_t = torch.tensor(Xp[None, ...], dtype=torch.long, device=device)
             L_t = torch.tensor([max(1, T)], dtype=torch.long, device=device)
             
-            # 各自呼叫專屬獨立模型獲取 Logits
             la = model_A(X_t, L_t)
             lp = model_P(X_t, L_t)
             lr = model_R(X_t, L_t)
@@ -417,7 +438,6 @@ def main(args):
             last_t = L_t.item() - 1
             a_idx = int(torch.argmax(la[0, last_t]).item())
             p_idx = int(torch.argmax(lp[0, last_t]).item())
-            # 使用 .item() 獲取標量，徹底杜絕 0維 Tensor 的索引報錯風險
             s_prob = float(torch.sigmoid(lr).item())
             
             action_pred = int(act_classes[a_idx]) if a_idx < len(act_classes) else int(act_classes[-1])
@@ -444,17 +464,12 @@ if __name__ == "__main__":
     ap.add_argument("--test", default="inputs/test_new.csv")
     ap.add_argument("--sample", default="result/sample_submission.csv")
     ap.add_argument("--out", default="result/submission.csv")
-    ap.add_argument("--epochs", type=int, default=20)
+    ap.add_argument("--epochs", type=int, default=9)
     ap.add_argument("--batch", type=int, default=32)
-    # ap.add_argument("--emb", type=int, default=16)
-    # ap.add_argument("--hidden", type=int, default=256)
-    # ap.add_argument("--layers", type=int, default=2)
-    # ap.add_argument("--drop", type=float, default=0.3)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--val_size", type=float, default=0.10)
     ap.add_argument("--max_len", type=int, default=512)
     ap.add_argument("--cap", type=int, default=11)
-    # ap.add_argument("--bidirectional", type=bool, default=True)
     args = ap.parse_args()
     
     MAXLEN = args.max_len
